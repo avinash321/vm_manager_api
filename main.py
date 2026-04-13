@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from fastapi.middleware.cors import CORSMiddleware
 import random
 
 # -----------------------------
@@ -38,6 +39,14 @@ Base.metadata.create_all(bind=engine)
 # FastAPI App
 # -----------------------------
 app = FastAPI(title="VM Manager API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # later restrict in prod
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # -----------------------------
