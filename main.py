@@ -95,6 +95,11 @@ def seed_data():
 seed_data()
 
 
+
+@app.get("/favicon.ico")
+def favicon():
+    return {"message": "No favicon"}
+
 # -----------------------------
 # CREATE VM
 # -----------------------------
