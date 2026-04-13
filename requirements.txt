@@ -4,3 +4,5 @@ sqlalchemy
 requests
 argon2-cffi
 python-jose
+psycopg2-binary
+alembic

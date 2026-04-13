@@ -8,6 +8,7 @@ from argon2.exceptions import VerifyMismatchError
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 import random
+import os
 
 # -----------------------------
 # CONFIG
@@ -20,16 +21,24 @@ ph = PasswordHasher()
 security = HTTPBearer()
 
 # -----------------------------
-# DB Setup
+# DB Setup (PostgreSQL Ready)
 # -----------------------------
-DATABASE_URL = "sqlite:///./vms.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Fix for Render postgres:// issue
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://")
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True  # important for production
+)
+
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 # -----------------------------
-# MODELS (SQLAlchemy)
+# MODELS
 # -----------------------------
 class VM(Base):
     __tablename__ = "vms"
@@ -53,10 +62,11 @@ class User(Base):
     password = Column(String)
 
 
+# ⚠️ Keep for now (remove after Alembic)
 Base.metadata.create_all(bind=engine)
 
 # -----------------------------
-# SCHEMAS (Pydantic) ✅ FIX
+# SCHEMAS
 # -----------------------------
 class VMCreate(BaseModel):
     name: str
@@ -81,7 +91,7 @@ class LoginRequest(BaseModel):
 # -----------------------------
 # APP
 # -----------------------------
-app = FastAPI(title="VM Manager API (JWT + Argon2)")
+app = FastAPI(title="VM Manager API (PostgreSQL + JWT + Argon2)")
 
 # -----------------------------
 # UTILS
