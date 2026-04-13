@@ -1,9 +1,23 @@
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import declarative_base, sessionmaker
+from jose import jwt, JWTError
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+from datetime import datetime, timedelta
+from pydantic import BaseModel
 import random
+
+# -----------------------------
+# CONFIG
+# -----------------------------
+SECRET_KEY = "supersecretkey"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+ph = PasswordHasher()
+security = HTTPBearer()
 
 # -----------------------------
 # DB Setup
@@ -14,54 +28,95 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-
 # -----------------------------
-# VM Model
+# MODELS (SQLAlchemy)
 # -----------------------------
 class VM(Base):
     __tablename__ = "vms"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    status = Column(String, index=True)  # running, stopped
+    name = Column(String)
+    status = Column(String)
     cpu = Column(Integer)
-    memory = Column(Integer)  # in GB
-    os = Column(String, index=True)
-    region = Column(String, index=True)
-    owner = Column(String, index=True)
+    memory = Column(Integer)
+    os = Column(String)
+    region = Column(String)
+    owner = Column(String)
     is_active = Column(Boolean, default=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True)
+    password = Column(String)
 
 
 Base.metadata.create_all(bind=engine)
 
-
 # -----------------------------
-# FastAPI App
+# SCHEMAS (Pydantic) ✅ FIX
 # -----------------------------
-app = FastAPI(title="VM Manager API")
+class VMCreate(BaseModel):
+    name: str
+    status: str
+    cpu: int
+    memory: int
+    os: str
+    region: str
+    owner: str
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # later restrict in prod
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-ALLOWED_IPS = ["157.50.151.70"]  # your IP
+class UserCreate(BaseModel):
+    username: str
+    password: str
 
-@app.middleware("http")
-async def restrict_ip(request: Request, call_next):
-    client_ip = request.client.host
 
-    if client_ip not in ALLOWED_IPS:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    return await call_next(request)
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 # -----------------------------
-# DB Dependency
+# APP
+# -----------------------------
+app = FastAPI(title="VM Manager API (JWT + Argon2)")
+
+# -----------------------------
+# UTILS
+# -----------------------------
+def hash_password(password: str):
+    return ph.hash(password)
+
+
+def verify_password(plain, hashed):
+    try:
+        ph.verify(hashed, plain)
+        return True
+    except VerifyMismatchError:
+        return False
+
+
+def create_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+# -----------------------------
+# DB SESSION
 # -----------------------------
 def get_db():
     db = SessionLocal()
@@ -72,7 +127,45 @@ def get_db():
 
 
 # -----------------------------
-# Dummy Data Generator
+# AUTH APIs
+# -----------------------------
+@app.post("/register")
+def register(user: UserCreate):
+    db = SessionLocal()
+
+    existing = db.query(User).filter(User.username == user.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    new_user = User(
+        username=user.username,
+        password=hash_password(user.password)
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.close()
+
+    return {"message": "User registered successfully"}
+
+
+@app.post("/login")
+def login(user: LoginRequest):
+    db = SessionLocal()
+
+    db_user = db.query(User).filter(User.username == user.username).first()
+
+    if not db_user or not verify_password(user.password, db_user.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_token({"sub": db_user.username})
+    db.close()
+
+    return {"access_token": token, "token_type": "bearer"}
+
+
+# -----------------------------
+# DUMMY DATA
 # -----------------------------
 def seed_data():
     db = SessionLocal()
@@ -83,19 +176,19 @@ def seed_data():
 
     statuses = ["running", "stopped"]
     oss = ["linux", "windows"]
-    regions = ["us-east", "us-west", "india", "europe"]
-    owners = ["team-a", "team-b", "team-c"]
+    regions = ["india", "us-east", "europe"]
+    owners = ["team-a", "team-b"]
 
     for i in range(1, 101):
         vm = VM(
             name=f"vm-{i}",
             status=random.choice(statuses),
-            cpu=random.choice([1, 2, 4, 8]),
-            memory=random.choice([2, 4, 8, 16]),
+            cpu=random.choice([1, 2, 4]),
+            memory=random.choice([2, 4, 8]),
             os=random.choice(oss),
             region=random.choice(regions),
             owner=random.choice(owners),
-            is_active=True,
+            is_active=True
         )
         db.add(vm)
 
@@ -105,90 +198,51 @@ def seed_data():
 
 seed_data()
 
-
-
-@app.get("/favicon.ico")
-def favicon():
-    return {"message": "No favicon"}
-
 # -----------------------------
-# CREATE VM
-# -----------------------------
-@app.post("/vms")
-def create_vm(vm: dict):
-    db = SessionLocal()
-
-    new_vm = VM(**vm)
-    db.add(new_vm)
-    db.commit()
-    db.refresh(new_vm)
-
-    db.close()
-    return new_vm
-
-
-# -----------------------------
-# GET ALL VMs (with filters)
+# PROTECTED VM APIs
 # -----------------------------
 @app.get("/vms")
-def get_vms(
-    status: str = None,
-    os: str = None,
-    region: str = None,
-    owner: str = None,
-    skip: int = 0,
-    limit: int = 10,
-):
+def get_vms(user=Depends(verify_token)):
     db = SessionLocal()
-
-    query = db.query(VM)
-
-    if status:
-        query = query.filter(VM.status == status)
-    if os:
-        query = query.filter(VM.os == os)
-    if region:
-        query = query.filter(VM.region == region)
-    if owner:
-        query = query.filter(VM.owner == owner)
-
-    vms = query.offset(skip).limit(limit).all()
+    vms = db.query(VM).all()
     db.close()
-
     return vms
 
 
-# -----------------------------
-# GET VM BY ID
-# -----------------------------
+@app.post("/vms")
+def create_vm(vm: VMCreate, user=Depends(verify_token)):
+    db = SessionLocal()
+
+    new_vm = VM(**vm.dict())
+    db.add(new_vm)
+    db.commit()
+    db.refresh(new_vm)
+    db.close()
+
+    return new_vm
+
+
 @app.get("/vms/{vm_id}")
-def get_vm(vm_id: int):
+def get_vm(vm_id: int, user=Depends(verify_token)):
     db = SessionLocal()
 
     vm = db.query(VM).filter(VM.id == vm_id).first()
-
     if not vm:
-        db.close()
         raise HTTPException(status_code=404, detail="VM not found")
 
     db.close()
     return vm
 
 
-# -----------------------------
-# UPDATE VM
-# -----------------------------
 @app.put("/vms/{vm_id}")
-def update_vm(vm_id: int, updated_data: dict):
+def update_vm(vm_id: int, updated_vm: VMCreate, user=Depends(verify_token)):
     db = SessionLocal()
 
     vm = db.query(VM).filter(VM.id == vm_id).first()
-
     if not vm:
-        db.close()
         raise HTTPException(status_code=404, detail="VM not found")
 
-    for key, value in updated_data.items():
+    for key, value in updated_vm.dict().items():
         setattr(vm, key, value)
 
     db.commit()
@@ -198,17 +252,12 @@ def update_vm(vm_id: int, updated_data: dict):
     return vm
 
 
-# -----------------------------
-# DELETE VM
-# -----------------------------
 @app.delete("/vms/{vm_id}")
-def delete_vm(vm_id: int):
+def delete_vm(vm_id: int, user=Depends(verify_token)):
     db = SessionLocal()
 
     vm = db.query(VM).filter(VM.id == vm_id).first()
-
     if not vm:
-        db.close()
         raise HTTPException(status_code=404, detail="VM not found")
 
     db.delete(vm)
@@ -219,8 +268,8 @@ def delete_vm(vm_id: int):
 
 
 # -----------------------------
-# HEALTH CHECK
+# HEALTH
 # -----------------------------
 @app.get("/")
 def health():
-    return {"message": "VM Manager API is running"}
+    return {"message": "API is running"}
