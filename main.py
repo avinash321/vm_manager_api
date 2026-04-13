@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -47,6 +47,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ALLOWED_IPS = ["157.50.151.70"]  # your IP
+
+@app.middleware("http")
+async def restrict_ip(request: Request, call_next):
+    client_ip = request.client.host
+
+    if client_ip not in ALLOWED_IPS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return await call_next(request)
 
 
 # -----------------------------
