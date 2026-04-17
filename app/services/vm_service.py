@@ -2,6 +2,8 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.db.models import VM
 from app.core.logger import logger
+from app.tasks.email_tasks import send_email_task
+from app.core.config import EMAIL_TO_SENT
 
 
 def get_all_vms(db: Session):
@@ -16,6 +18,10 @@ def create_vm(db: Session, vm_data):
     db.add(vm)
     db.commit()
     db.refresh(vm)
+
+    email = EMAIL_TO_SENT
+    send_email_task.delay(email, vm_data.name)
+    logger.info("VM Creation _ Send Mail Task Sent to Worker")
 
     return vm
 

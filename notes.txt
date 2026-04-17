@@ -1,0 +1,6 @@
+# How to run Celery App
+celery -A app.core.celery_worker_app.celery_app worker --loglevel=info --pool=solo
+
+# How to force close the fastapi process
+netstat -ano | findstr :8000
+taskkill /PID 12345 /F
