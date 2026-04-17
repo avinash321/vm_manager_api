@@ -51,3 +51,13 @@ app.include_router(vm.router)
 @app.get("/")
 def health():
     return {"message": "API is running"}
+
+from app.core.celery_worker_app import celery_app
+
+@app.get("/test")
+def test():
+    result = celery_app.send_task(
+        "app.tasks.email_tasks.send_email_task",
+        args=["avinash.kandagatla@example.com", "vm-123"]
+    )
+    return {"task_id": result.id}
