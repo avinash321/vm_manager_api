@@ -1,0 +1,5 @@
+1) VM Manager API - Fast API - Render
+2) VM manager APP - Flask APP - Render
+3) Postgres DB - Connected to Fast API - Render
+4) Celery Worker - vm_db - Upstash Redis DB - vm_redis db
+5) 

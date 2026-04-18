@@ -9,3 +9,5 @@ alembic
 celery
 pika
 redis
+amqp
+kombu
