@@ -6,6 +6,7 @@ from app.core.logger import logger
 import random
 from app.db.database import SessionLocal
 from app.db.models import VM
+from app.core.celery_worker_app import celery_app
 
 app = FastAPI(title="VM Manager API")
 
@@ -52,10 +53,13 @@ app.include_router(vm.router)
 def health():
     return {"message": "API is running"}
 
-from app.core.celery_worker_app import celery_app
+@app.get("/avi")
+def health():
+    return {"message": "Testing APP"}
 
 @app.get("/test")
 def test():
+    print("testing")
     result = celery_app.send_task(
         "app.tasks.email_tasks.send_email_task",
         args=["avinash.kandagatla@example.com", "vm-123"]
