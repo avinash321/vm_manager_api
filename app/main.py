@@ -7,6 +7,7 @@ import random
 from app.db.database import SessionLocal
 from app.db.models import VM
 from app.core.celery_worker_app import celery_app
+from app.api.v1.router import router as v1_router
 
 app = FastAPI(title="VM Manager API")
 
@@ -45,13 +46,15 @@ def seed_data():
     db.close()
 
 
-app.include_router(auth.router)
-app.include_router(vm.router)
-
-
 @app.get("/")
 def health():
     return {"message": "API is running"}
+
+
+
+# Register versions
+app.include_router(v1_router, prefix="/api/v1")
+
 
 
 

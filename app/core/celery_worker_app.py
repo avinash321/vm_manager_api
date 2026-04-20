@@ -1,11 +1,13 @@
 from celery import Celery
 import os
 from app.core.config import REDIS_URL
+#import ssl
 
 celery_app = Celery(
     "vm_manager",
     broker=REDIS_URL,
     backend=REDIS_URL
+    #backend= "rpc://"
 )
 
 # Optional configs
@@ -16,6 +18,7 @@ celery_app.conf.update(
     timezone="Asia/Kolkata",
     enable_utc=False,
     broker_use_ssl={"ssl_cert_reqs": "none"},
+    #broker_use_ssl={'cert_reqs': ssl.CERT_NONE},
     redis_backend_use_ssl={"ssl_cert_reqs": "none"},
     broker_pool_limit=1,
     include=["app.tasks.email_tasks"]

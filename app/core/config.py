@@ -7,6 +7,7 @@ EMAIL_TO_SENT = os.getenv("EMAIL_TO_SENT")
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 REDIS_URL = os.getenv("REDIS_URL")
+#REDIS_URL = os.getenv("RABBITMQ_URL")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
