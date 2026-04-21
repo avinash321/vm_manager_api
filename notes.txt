@@ -4,3 +4,5 @@ celery -A app.core.celery_worker_app.celery_app worker --loglevel=info --pool=so
 # How to force close the fastapi process
 netstat -ano | findstr :8000
 taskkill /PID 12345 /F
+
+# Cache aside pattern with redis for expensive calls
