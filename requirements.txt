@@ -11,3 +11,4 @@ pika
 redis
 amqp
 kombu
+slowapi

@@ -1,5 +1,12 @@
 from fastapi import FastAPI
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.errors import RateLimitExceeded
+from app.core.redis_ratelimiter import (
+    limiter,
+    rate_limit_exceeded_handler
+)
 from app.api import auth, vm
+
 from app.db.database import engine
 from app.db.models import Base
 from app.core.logger import logger
@@ -10,6 +17,15 @@ from app.core.celery_worker_app import celery_app
 from app.api.v1.router import router as v1_router
 
 app = FastAPI(title="VM Manager API")
+
+# Attach limiter to app
+app.state.limiter = limiter
+
+# Middleware
+app.add_middleware(SlowAPIMiddleware)
+
+# Exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 Base.metadata.create_all(bind=engine)
 

@@ -9,6 +9,7 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 REDIS_URL = os.getenv("REDIS_URL")
 #REDIS_URL = os.getenv("RABBITMQ_URL")
 REDIS_CACHE = os.getenv("REDIS_CACHE")
+REDIS_RATELIMIT = os.getenv("REDIS_RATELIMIT")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
